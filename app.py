@@ -9,26 +9,42 @@ import yfinance as yf
 def parse_symbols(text: str):
     if not text:
         return []
-    return [s.strip() for s in re.split(r'[\s,;]+', text) if s.strip()]
+    symbols = []
+    for s in re.split(r'[\s,;]+', text):
+        s = s.strip()
+        if s:
+            # 美股代码（不含"."）转为大写，中国股票代码保持原样
+            if '.' not in s:
+                s = s.upper()
+            symbols.append(s)
+    return symbols
 
 
 def get_price_change(symbol: str):
     symbol = symbol.strip()
-    ticker = yf.Ticker(symbol)
-    hist = ticker.history(period='2d')
-    if hist.empty:
-        raise ValueError(f'无法获取 {symbol} 的历史数据')
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period='2d')
+        if hist.empty:
+            # 检查是否是有效的股票代码
+            if '.' in symbol:
+                raise ValueError(f'股票代码 {symbol} 不存在或无法获取数据，请检查中国股票代码格式（如 000001.SZ）')
+            else:
+                raise ValueError(f'股票代码 {symbol} 不存在或无法获取数据，请检查代码是否正确')
 
-    last_close = float(hist['Close'].iloc[-1])
-    if len(hist) >= 2:
-        prev_close = float(hist['Close'].iloc[-2])
-        change = last_close - prev_close
-        pct = (change / prev_close) * 100 if prev_close != 0 else 0.0
-    else:
-        change = 0.0
-        pct = 0.0
+        last_close = float(hist['Close'].iloc[-1])
+        if len(hist) >= 2:
+            prev_close = float(hist['Close'].iloc[-2])
+            change = last_close - prev_close
+            pct = (change / prev_close) * 100 if prev_close != 0 else 0.0
+        else:
+            change = 0.0
+            pct = 0.0
 
-    return last_close, change, pct
+        return last_close, change, pct
+    except Exception as e:
+        # 捕获网络或其他错误
+        raise Exception(f'{symbol}: {str(e)}')
 
 
 def fetch_batch(symbols):
