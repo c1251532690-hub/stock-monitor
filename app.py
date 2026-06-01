@@ -1,8 +1,8 @@
 import re
+import time
 from datetime import datetime
 
 import streamlit as st
-from streamlit import st_autorefresh
 import yfinance as yf
 
 
@@ -83,7 +83,6 @@ def main():
 
     if auto_refresh:
         st.sidebar.success(f'自动刷新已开启，每 {interval} 秒刷新一次。')
-        st_autorefresh(interval * 1000, key='auto_refresh')
 
     if submit or auto_refresh:
         with st.spinner('正在查询股票数据，请稍候...'):
@@ -99,7 +98,9 @@ def main():
 
         if error_count > 0:
             st.warning('部分股票获取失败，请检查代码格式或后缀是否正确，例如 000001.SZ / 600000.SS。')
-
+        if auto_refresh:
+            time.sleep(interval)
+            st.rerun()
     else:
         st.info('请点击侧边栏的“查询”按钮以获取价格信息。')
 
