@@ -48,21 +48,32 @@ def get_price_change(symbol: str):
         raise Exception(f'{symbol}: {str(e)}')
 
 
-def get_price_history(symbol: str):
-    """获取股票的完整历史价格数据（从上市至今）"""
+def get_price_history(symbol: str, period: str = 'max'):
+    """获取股票的历史价格数据
+    
+    Args:
+        symbol: 股票代码
+        period: 时间范围 ('1m', '30m', '1d', '5d', '1wk', '1y', '5y', 'max')
+    """
     symbol = symbol.strip()
     try:
         ticker = yf.Ticker(symbol)
-        # 获取最大历史数据（从上市至今）
-        hist = ticker.history(period='max')
+        # 根据 period 选择合适的 interval
+        if period in ['1m', '5m', '15m', '30m', '60m']:
+            # 盘中数据，通常只能获取最近几天
+            hist = ticker.history(period='7d', interval=period)
+        else:
+            # 日线或更长时间范围
+            hist = ticker.history(period=period)
+        
         if hist.empty:
-            raise ValueError(f'无法获取 {symbol} 的历史数据')
+            raise ValueError(f'无法获取 {symbol} 的{period}时间范围数据')
         return hist
     except Exception as e:
         raise Exception(f'{symbol}: {str(e)}')
 
 
-def plot_price_chart(symbol: str, hist) -> go.Figure:
+def plot_price_chart(symbol: str, hist, period_label: str = '全部') -> go.Figure:
     """使用 plotly 绘制交互式价格走势图"""
     fig = go.Figure()
 
@@ -74,7 +85,7 @@ def plot_price_chart(symbol: str, hist) -> go.Figure:
             mode='lines',
             name='收盘价',
             line=dict(color='#1f77b4', width=2),
-            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>收盘价: ¥%{y:.2f}<extra></extra>',
+            hovertemplate='<b>%{x|%Y-%m-%d %H:%M}</b><br>收盘价: ¥%{y:.2f}<extra></extra>',
         )
     )
 
@@ -92,7 +103,7 @@ def plot_price_chart(symbol: str, hist) -> go.Figure:
 
     # 更新布局
     fig.update_layout(
-        title=f'{symbol} 历史价格走势（从上市至今）',
+        title=f'{symbol} 历史价格走势 - {period_label}',
         xaxis_title='日期',
         yaxis_title='价格（¥）',
         yaxis2=dict(title='成交量', overlaying='y', side='right'),
@@ -180,17 +191,40 @@ def main():
         # 如果有成功的股票，显示走势图
         if successful_symbols:
             st.subheader('价格走势图')
-            st.write('点击下方选项卡查看各股票的历史价格走势（支持缩放、悬停查看价格）')
+            st.write('选择时间范围查看各股票的历史价格走势（支持缩放、悬停查看价格）')
+
+            # 时间范围映射
+            period_map = {
+                '1分钟': ('1m', '1分钟'),
+                '30分钟': ('30m', '30分钟'),
+                '日线': ('1d', '日线'),
+                '周线': ('1wk', '周线'),
+                '1年': ('1y', '1年'),
+                '5年': ('5y', '5年'),
+                '全部': ('max', '全部历史'),
+            }
 
             # 创建选项卡来分别显示每支股票的走势图
             tabs = st.tabs(successful_symbols)
 
             for tab, symbol in zip(tabs, successful_symbols):
                 with tab:
+                    # 添加时间范围选择器
+                    col1, col2, col3 = st.columns([2, 1, 1])
+                    with col1:
+                        selected_period_label = st.selectbox(
+                            '选择时间范围',
+                            list(period_map.keys()),
+                            index=5,  # 默认选择 '5年'
+                            key=f'{symbol}_period'
+                        )
+                    
+                    selected_period, period_label = period_map[selected_period_label]
+                    
                     try:
-                        with st.spinner(f'正在加载 {symbol} 的历史数据...'):
-                            hist = get_price_history(symbol)
-                        fig = plot_price_chart(symbol, hist)
+                        with st.spinner(f'正在加载 {symbol} 的{period_label}数据...'):
+                            hist = get_price_history(symbol, period=selected_period)
+                        fig = plot_price_chart(symbol, hist, period_label)
                         st.plotly_chart(fig, use_container_width=True)
 
                         # 显示数据统计
