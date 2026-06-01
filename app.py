@@ -144,17 +144,22 @@ def fetch_batch(symbols):
     return results
 
 
+def trigger_query():
+    st.session_state.run_query = True
+
+
 def main():
     st.set_page_config(page_title='股票价格监控', layout='wide')
     st.title('股票价格监控 Web App')
     st.write('输入股票代码，支持批量查询，显示最新价格和涨跌幅，并可启用自动刷新。')
 
     st.sidebar.header('查询配置')
-    symbols_text = st.sidebar.text_area(
+    symbols_text = st.sidebar.text_input(
         '股票代码（支持空格、逗号或分号分隔）',
         value='AAPL MSFT',
-        height=120,
         help='示例：AAPL 000001.SZ 或 AAPL,MSFT,000001.SZ',
+        key='symbols_text',
+        on_change=trigger_query,
     )
     auto_refresh = st.sidebar.checkbox('启用自动刷新', value=False)
     interval = st.sidebar.number_input(
