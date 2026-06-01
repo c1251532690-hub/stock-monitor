@@ -162,6 +162,12 @@ def main():
     )
     submit = st.sidebar.button('查询')
 
+    if 'run_query' not in st.session_state:
+        st.session_state.run_query = False
+
+    if submit:
+        st.session_state.run_query = True
+
     symbols = parse_symbols(symbols_text)
     if not symbols:
         st.warning('请在侧边栏输入至少一个股票代码，然后点击“查询”。')
@@ -170,7 +176,7 @@ def main():
     if auto_refresh:
         st.sidebar.success(f'自动刷新已开启，每 {interval} 秒刷新一次。')
 
-    if submit or auto_refresh:
+    if st.session_state.run_query or auto_refresh:
         with st.spinner('正在查询股票数据，请稍候...'):
             results = fetch_batch(symbols)
 
