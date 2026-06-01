@@ -2,6 +2,7 @@ import re
 import time
 from datetime import datetime
 
+import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 
@@ -45,6 +46,64 @@ def get_price_change(symbol: str):
     except Exception as e:
         # 捕获网络或其他错误
         raise Exception(f'{symbol}: {str(e)}')
+
+
+def get_price_history(symbol: str):
+    """获取股票的完整历史价格数据（从上市至今）"""
+    symbol = symbol.strip()
+    try:
+        ticker = yf.Ticker(symbol)
+        # 获取最大历史数据（从上市至今）
+        hist = ticker.history(period='max')
+        if hist.empty:
+            raise ValueError(f'无法获取 {symbol} 的历史数据')
+        return hist
+    except Exception as e:
+        raise Exception(f'{symbol}: {str(e)}')
+
+
+def plot_price_chart(symbol: str, hist) -> go.Figure:
+    """使用 plotly 绘制交互式价格走势图"""
+    fig = go.Figure()
+
+    # 添加收盘价线
+    fig.add_trace(
+        go.Scatter(
+            x=hist.index,
+            y=hist['Close'],
+            mode='lines',
+            name='收盘价',
+            line=dict(color='#1f77b4', width=2),
+            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>收盘价: ¥%{y:.2f}<extra></extra>',
+        )
+    )
+
+    # 添加成交量柱状图（作为二级 y 轴）
+    fig.add_trace(
+        go.Bar(
+            x=hist.index,
+            y=hist['Volume'],
+            name='成交量',
+            yaxis='y2',
+            marker=dict(color='rgba(158, 154, 200, 0.5)'),
+            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>成交量: %{y:,.0f}<extra></extra>',
+        )
+    )
+
+    # 更新布局
+    fig.update_layout(
+        title=f'{symbol} 历史价格走势（从上市至今）',
+        xaxis_title='日期',
+        yaxis_title='价格（¥）',
+        yaxis2=dict(title='成交量', overlaying='y', side='right'),
+        hovermode='x unified',
+        template='plotly_white',
+        height=500,
+        xaxis_rangeslider_visible=False,
+        margin=dict(l=50, r=100, t=80, b=50),
+    )
+
+    return fig
 
 
 def fetch_batch(symbols):
@@ -114,6 +173,39 @@ def main():
 
         if error_count > 0:
             st.warning('部分股票获取失败，请检查代码格式或后缀是否正确，例如 000001.SZ / 600000.SS。')
+
+        # 获取成功的股票代码
+        successful_symbols = [row['代码'] for row in results if row['状态'] == '成功']
+
+        # 如果有成功的股票，显示走势图
+        if successful_symbols:
+            st.subheader('价格走势图')
+            st.write('点击下方选项卡查看各股票的历史价格走势（支持缩放、悬停查看价格）')
+
+            # 创建选项卡来分别显示每支股票的走势图
+            tabs = st.tabs(successful_symbols)
+
+            for tab, symbol in zip(tabs, successful_symbols):
+                with tab:
+                    try:
+                        with st.spinner(f'正在加载 {symbol} 的历史数据...'):
+                            hist = get_price_history(symbol)
+                        fig = plot_price_chart(symbol, hist)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # 显示数据统计
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric('最高价', f"¥{hist['High'].max():.2f}")
+                        with col2:
+                            st.metric('最低价', f"¥{hist['Low'].min():.2f}")
+                        with col3:
+                            st.metric('平均价', f"¥{hist['Close'].mean():.2f}")
+                        with col4:
+                            st.metric('数据点数', len(hist))
+                    except Exception as e:
+                        st.error(f'无法加载 {symbol} 的走势图：{str(e)}')
+
         if auto_refresh:
             time.sleep(interval)
             st.rerun()
